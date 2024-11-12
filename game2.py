@@ -119,6 +119,23 @@ def use_health_potion():
     else:
         st.error("You don't have any health potions!")
 
+def use_amulet():
+    if 'amulet' in st.session_state.game_state['inventory']:
+        st.session_state.game_state['health'] += 10
+        st.session_state.game_state['health'] = min(st.session_state.game_state['health'], 120)
+        st.session_state.game_state['inventory'].remove('amulet')
+        st.success("You used the Amulet! Your health cap is increased, and you feel stronger.")
+    else:
+        st.error("You don't have an Amulet!")
+
+def use_key():
+    if 'key' in st.session_state.game_state['inventory']:
+        st.session_state.game_state['inventory'].remove('key')
+        st.success("You used the Key to unlock a hidden chest! Inside, you found a rare **artifact**!")
+        st.session_state.game_state['inventory'].append('artifact')
+    else:
+        st.error("You don't have a Key!")
+
 def display_game_state():
     st.sidebar.header("Game Status")
     health_percentage = max(0, st.session_state.game_state['health']) / 100
@@ -128,10 +145,12 @@ def display_game_state():
     st.sidebar.subheader("Inventory")
     if st.session_state.game_state['inventory']:
         for item in st.session_state.game_state['inventory']:
-            if item == 'health_potion':
-                st.sidebar.markdown(f"- **{item.capitalize()}** (Use to restore health)", unsafe_allow_html=True)
-            else:
-                st.sidebar.write(f"- {item.capitalize()}")
+            if item == 'amulet' and st.sidebar.button("Use Amulet"):
+                use_amulet()
+            elif item == 'key' and st.sidebar.button("Use Key"):
+                use_key()
+            elif item == 'health_potion' and st.sidebar.button("Use Health Potion"):
+                use_health_potion()
     else:
         st.sidebar.write("Empty")
 
@@ -185,10 +204,6 @@ def main():
         if st.button(f"Pick up {item.capitalize()}"):
             add_item_to_inventory()
 
-    if 'health_potion' in st.session_state.game_state['inventory']:
-        if st.button("Use Health Potion"):
-            use_health_potion()
-
     user_input = st.chat_input("What will you do next?", key="user_input")
 
     if user_input:
@@ -196,17 +211,4 @@ def main():
         st.session_state.conversation_history.append(user_message)
         st.session_state.messages.append(user_message)
 
-        # Update choices made when user provides input
         st.session_state.game_state['choices_made'] += 1
-
-        with st.spinner("The forest whispers..."):
-            response = generate_story_response(st.session_state.conversation_history)
-            update_game_state(response)
-            ai_message = {"role": "model", "parts": [{"text": response}]}
-            st.session_state.conversation_history.append(ai_message)
-            st.session_state.messages.append(ai_message)
-
-        st.rerun()
-
-if __name__ == "__main__":
-    main()
