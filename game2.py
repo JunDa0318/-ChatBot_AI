@@ -71,6 +71,7 @@ def generate_story_response(conversation_history: List[Dict[str, Any]]) -> str:
         
         Please continue the story and provide 2-3 clear choices for the player.
         Highlight items the player finds in the story with ** so they are easy to pick up.
+        Easy to find health_potion when health is lower than 30.
         """
         response = chat_session.send_message(
             conversation_history[-1]["parts"][0]["text"] + "\n" + context
