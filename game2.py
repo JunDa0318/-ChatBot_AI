@@ -89,6 +89,9 @@ def update_game_state(response_text: str):
         if action in response_text.lower():
             st.session_state.game_state['health'] -= 15  # Deduct more health for dangerous actions
     
+    # Ensure health doesn't drop below 0
+    st.session_state.game_state['health'] = max(st.session_state.game_state['health'], 0)
+
     # Inventory items and their effects
     inventory_items = {
         'potion': {'effect': 'restore_health', 'value': 20},
@@ -125,9 +128,10 @@ def display_game_state():
     """Display the current game state in the sidebar"""
     st.sidebar.header("Game Status")
     
-    # Health bar
-    st.sidebar.progress(st.session_state.game_state['health'] / 100)
-    st.sidebar.write(f"Health: {st.session_state.game_state['health']}%")
+    # Health bar, ensuring it stays within the 0-1 range for Streamlit progress
+    health_percentage = max(0, st.session_state.game_state['health']) / 100
+    st.sidebar.progress(health_percentage)
+    st.sidebar.write(f"Health: {max(0, st.session_state.game_state['health'])}%")
     
     # Inventory
     st.sidebar.subheader("Inventory")
