@@ -83,18 +83,43 @@ def generate_story_response(conversation_history: List[Dict[str, Any]]) -> str:
 
 def update_game_state(response_text: str):
     """Update game state based on the story response"""
-    # Simple health reduction for dangerous choices
-    if any(word in response_text.lower() for word in ['hurt', 'damage', 'wound', 'injury']):
-        st.session_state.game_state['health'] -= 10
+    # Dangerous actions that reduce health
+    dangerous_actions = ['fight', 'confront', 'explore', 'approach', 'follow', 'ignore warning', 'trap', 'venture deeper']
+    for action in dangerous_actions:
+        if action in response_text.lower():
+            st.session_state.game_state['health'] -= 15  # Deduct more health for dangerous actions
+    
+    # Inventory items and their effects
+    inventory_items = {
+        'potion': {'effect': 'restore_health', 'value': 20},
+        'sword': {'effect': 'attack_bonus', 'value': 5},
+        'key': {'effect': 'unlock', 'value': 1},
+        'map': {'effect': 'navigation_help', 'value': 1},
+        'shield': {'effect': 'reduce_damage', 'value': 10},
+        'amulet': {'effect': 'protection', 'value': 5}
+    }
     
     # Add items to inventory if found
-    items = ['potion', 'sword', 'key', 'map', 'gem', 'scroll']
-    for item in items:
+    for item in inventory_items.keys():
         if f"found a {item}" in response_text.lower() and item not in st.session_state.game_state['inventory']:
             st.session_state.game_state['inventory'].append(item)
     
     # Increment choices counter
     st.session_state.game_state['choices_made'] += 1
+
+def use_inventory_item(item_name):
+    """Use an item from the inventory if applicable"""
+    if item_name == "potion" and "potion" in st.session_state.game_state['inventory']:
+        # Potion restores health
+        st.session_state.game_state['health'] = min(100, st.session_state.game_state['health'] + 20)
+        st.session_state.game_state['inventory'].remove("potion")
+        st.success("You used a potion and regained 20 health!")
+    elif item_name == "shield" and "shield" in st.session_state.game_state['inventory']:
+        # Shield reduces health loss in next dangerous action
+        st.session_state.game_state['inventory'].remove("shield")
+        st.success("You equipped a shield. It will reduce damage from the next danger you encounter.")
+    else:
+        st.warning(f"You cannot use {item_name} now.")
 
 def display_game_state():
     """Display the current game state in the sidebar"""
@@ -108,6 +133,8 @@ def display_game_state():
     st.sidebar.subheader("Inventory")
     if st.session_state.game_state['inventory']:
         for item in st.session_state.game_state['inventory']:
+            if st.sidebar.button(f"Use {item.capitalize()}"):
+                use_inventory_item(item)
             st.sidebar.write(f"- {item}")
     else:
         st.sidebar.write("Empty")
@@ -143,8 +170,8 @@ def main():
                     "2. A strange glowing mushroom near a hollow tree\n"
                     "3. The sound of running water in the distance\n\n"
                     "What would you like to do?"
-                )}
-        ]}
+                )}]
+        }
         st.session_state.conversation_history.append(intro_message)
         st.session_state.messages.append(intro_message)
     
