@@ -212,3 +212,14 @@ def main():
         st.session_state.messages.append(user_message)
 
         st.session_state.game_state['choices_made'] += 1
+        with st.spinner("The forest whispers..."):
+            response = generate_story_response(st.session_state.conversation_history)
+            update_game_state(response)
+            ai_message = {"role": "model", "parts": [{"text": response}]}
+            st.session_state.conversation_history.append(ai_message)
+            st.session_state.messages.append(ai_message)
+
+        st.rerun()
+
+if __name__ == "__main__":
+    main()
