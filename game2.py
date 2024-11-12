@@ -3,11 +3,13 @@ import streamlit as st
 from dotenv import load_dotenv
 import google.generativeai as genai
 from typing import List, Dict, Any
+import random
 
 # Load environment variables and configure API
 load_dotenv()
 genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
 
+# Custom styles
 def apply_custom_styles():
     st.markdown("""
         <style>
@@ -22,18 +24,11 @@ def apply_custom_styles():
             border-radius: 10px;
             margin: 10px 0;
         }
-        .highlight {
-            color: #FFA500;
-            font-weight: bold;
-        }
-        .inventory-item {
-            color: #FFA500;
-            cursor: pointer;
-        }
         </style>
     """, unsafe_allow_html=True)
 
 def initialize_session_state():
+    """Initialize or reset session state variables"""
     if "conversation_history" not in st.session_state:
         st.session_state.conversation_history = []
     if "messages" not in st.session_state:
@@ -41,185 +36,198 @@ def initialize_session_state():
     if "game_state" not in st.session_state:
         st.session_state.game_state = {
             "health": 100,
-            "inventory": [],
+            "food": 5,  # Starting food supply
             "choices_made": 0,
-            "found_item": None
+            "success": False,
+            "mode": None  # Easy or Hard mode
         }
 
 def create_model() -> genai.GenerativeModel:
+    """Create and configure the Gemini model"""
     generation_config = {
         "temperature": 0.8,
         "top_p": 0.95,
         "top_k": 40,
-        "max_output_tokens": 1024,
+        "max_output_tokens": 512,
         "response_mime_type": "text/plain",
     }
+    
     return genai.GenerativeModel(
         model_name="gemini-1.5-flash",
         generation_config=generation_config
     )
 
 def generate_story_response(conversation_history: List[Dict[str, Any]]) -> str:
+    """Generate the next part of the story using the Gemini model"""
     try:
         model = create_model()
         chat_session = model.start_chat(history=conversation_history)
+        
+        # Add context about game state to the prompt
         context = f"""
         Current game state:
+        - Mode: {st.session_state.game_state['mode']}
         - Health: {st.session_state.game_state['health']}
-        - Inventory: {', '.join(st.session_state.game_state['inventory']) if st.session_state.game_state['inventory'] else 'empty'}
+        - Food: {st.session_state.game_state['food']}
         - Choices made: {st.session_state.game_state['choices_made']}
+        - Success: {"yes" if st.session_state.game_state['success'] else "no"}
         
-        Please continue the story and provide 2-3 clear choices for the player.
-        Highlight items the player finds in the story with ** so they are easy to pick up.
-        Easy to find health_potion when health is lower than 30.
+        In Easy mode:
+        - Higher chance of positive outcomes
+        - Easier access to food
+        - Health restoration available through events
+        
+        In Hard mode:
+        - Food is scarce, and only food can restore health
+        - Balanced good and bad outcomes
         """
+        
+        # Get response from model
         response = chat_session.send_message(
             conversation_history[-1]["parts"][0]["text"] + "\n" + context
         )
+        
         return response.text
     except Exception as e:
         st.error(f"Error generating response: {str(e)}")
         return "Something went wrong in the forest... Please try again."
 
 def update_game_state(response_text: str):
-    dangerous_actions = ['fight', 'confront', 'explore', 'approach', 'follow', 'ignore warning', 'trap', 'venture deeper']
-    for action in dangerous_actions:
-        if action in response_text.lower():
-            st.session_state.game_state['health'] -= 15
-    st.session_state.game_state['health'] = max(st.session_state.game_state['health'], 0)
-
-    inventory_items = {
-        'potion': 'You found a **potion**!',
-        'sword': 'You found a **sword**!',
-        'key': 'You found a **key**!',
-        'map': 'You found a **map**!',
-        'shield': 'You found a **shield**!',
-        'amulet': 'You found an **amulet**!',
-        'health_potion': 'You found a **health potion**!'
-    }
-    for item, notification in inventory_items.items():
-        if f"**{item}**" in response_text.lower():
-            st.session_state.game_state['found_item'] = item
-            st.session_state.game_state['choices_made'] += 1
-            st.write(f"🎉 You found a **{item.capitalize()}**!")
-
-def add_item_to_inventory():
-    item = st.session_state.game_state['found_item']
-    if item and item not in st.session_state.game_state['inventory']:
-        st.session_state.game_state['inventory'].append(item)
-        st.session_state.game_state['found_item'] = None
-        st.success(f"{item.capitalize()} added to inventory!")
-
-def use_health_potion():
-    if 'health_potion' in st.session_state.game_state['inventory']:
-        st.session_state.game_state['health'] += 30
-        st.session_state.game_state['health'] = min(st.session_state.game_state['health'], 100)
-        st.session_state.game_state['inventory'].remove('health_potion')
-        st.success("You used a health potion! Health restored by 30 points.")
+    """Update game state based on the story response with varying outcomes based on mode"""
+    # Consume food with each choice and restore health if food is available
+    if st.session_state.game_state['food'] > 0:
+        st.session_state.game_state['food'] -= 1
+        st.session_state.game_state['health'] = min(100, st.session_state.game_state['health'] + 10)  # Restore 10 health when food is consumed
+        st.info("🍞 You consumed food and restored 10 health points!")
     else:
-        st.error("You don't have any health potions!")
+        st.session_state.game_state['health'] -= 10  # Lose health if out of food
 
-def use_amulet():
-    if 'amulet' in st.session_state.game_state['inventory']:
-        st.session_state.game_state['health'] += 10
-        st.session_state.game_state['health'] = min(st.session_state.game_state['health'], 120)
-        st.session_state.game_state['inventory'].remove('amulet')
-        st.success("You used the Amulet! Your health cap is increased, and you feel stronger.")
+    # Determine outcome weights based on mode
+    if st.session_state.game_state['mode'] == "Easy":
+        outcome = random.choices(['good', 'bad'], weights=[0.7, 0.3])[0]
+        food_chance = 0.4  # Higher chance of finding food in Easy mode
+    elif st.session_state.game_state['mode'] == "Hard":
+        outcome = random.choices(['good', 'bad'], weights=[0.5, 0.5])[0]
+        food_chance = 0.2  # Lower chance of finding food in Hard mode
     else:
-        st.error("You don't have an Amulet!")
+        outcome = 'good'  # Default to good if mode is not set
+        food_chance = 0.0
 
-def use_key():
-    if 'key' in st.session_state.game_state['inventory']:
-        st.session_state.game_state['inventory'].remove('key')
-        st.success("You used the Key to unlock a hidden chest! Inside, you found a rare **artifact**!")
-        st.session_state.game_state['inventory'].append('artifact')
-    else:
-        st.error("You don't have a Key!")
+    # Define responses for each outcome type
+    if outcome == 'good':
+        if "move closer to success" in response_text.lower():
+            st.session_state.game_state['success'] = True
+        elif st.session_state.game_state['mode'] == "Easy" and "restore health" in response_text.lower():
+            st.session_state.game_state['health'] = min(100, st.session_state.game_state['health'] + 20)
+
+        # Chance to find food supply in both modes
+        if random.random() < food_chance:
+            st.session_state.game_state['food'] += 3
+            st.info("🍞 You found some food supplies!")
+
+    elif outcome == 'bad':
+        if "lose health" in response_text.lower():
+            st.session_state.game_state['health'] -= 10
+        elif "fatal event" in response_text.lower() and st.session_state.game_state['health'] <= 10:
+            st.session_state.game_state['health'] = 0
+    
+    # Increment choices counter
+    st.session_state.game_state['choices_made'] += 1
 
 def display_game_state():
+    """Display the current game state in the sidebar"""
     st.sidebar.header("Game Status")
-    health_percentage = max(0, st.session_state.game_state['health']) / 100
-    st.sidebar.progress(health_percentage)
-    st.sidebar.write(f"Health: {max(0, st.session_state.game_state['health'])}%")
-
-    st.sidebar.subheader("Inventory")
-    if st.session_state.game_state['inventory']:
-        for item in st.session_state.game_state['inventory']:
-            if item == 'amulet' and st.sidebar.button("Use Amulet"):
-                use_amulet()
-            elif item == 'key' and st.sidebar.button("Use Key"):
-                use_key()
-            elif item == 'health_potion' and st.sidebar.button("Use Health Potion"):
-                use_health_potion()
-    else:
-        st.sidebar.write("Empty")
-
+    
+    # Health bar
+    st.sidebar.progress(st.session_state.game_state['health'] / 100)
+    st.sidebar.write(f"Health: {st.session_state.game_state['health']}%")
+    
+    # Food supply
+    st.sidebar.subheader("Food Supply")
+    st.sidebar.write(f"Food remaining: {st.session_state.game_state['food']}")
+    
+    # Choices made and success status
     st.sidebar.write(f"Choices made: {st.session_state.game_state['choices_made']}")
+    if st.session_state.game_state['success']:
+        st.sidebar.write("Success: 🌟 Close to escaping the forest!")
 
 def main():
     st.set_page_config(page_title="The Cursed Forest", layout="wide")
     apply_custom_styles()
+    
     st.title("🌲 The Cursed Forest - Interactive Adventure")
+    
+    # Initialize session state
     initialize_session_state()
-
+    
+    # Add restart button in sidebar
     if st.sidebar.button("Restart Game"):
         st.session_state.clear()
         st.rerun()
-
+    
+    # Mode selection if starting new game
+    if st.session_state.game_state["mode"] is None:
+        st.write("Choose your difficulty mode:")
+        if st.button("Easy Mode"):
+            st.session_state.game_state["mode"] = "Easy"
+        elif st.button("Hard Mode"):
+            st.session_state.game_state["mode"] = "Hard"
+        return  # Wait for user to select mode before continuing
+    
+    # Introduction message if starting new game
     if not st.session_state.conversation_history:
         intro_message = {
             "role": "model",
             "parts": [{
                 "text": (
-                    "Welcome, brave soul! You are Kaelen, a wanderer who finds yourself lost in the mysterious Cursed Forest. "
-                    "Strange creatures, hidden dangers, and an ancient curse lurk in the shadows. Legend has it that the heart "
-                    "of the forest holds a powerful artifact, but no one who has ventured deep enough has ever returned.\n\n"
-                    "Your adventure begins at the edge of the forest, where an eerie fog hangs in the air. You notice:\n\n"
-                    "1. A narrow path leading deeper into the woods\n"
-                    "2. A strange glowing mushroom near a hollow tree\n"
-                    "3. The sound of running water in the distance\n\n"
-                    "What would you like to do?"
+                    f"Welcome, brave soul! You are Kaelen, a wanderer who finds yourself lost in the mysterious Cursed Forest. "
+                    f"Your adventure begins at the edge of the forest, where an eerie fog hangs in the air. "
+                    f"What would you like to do?"
                 )}]
         }
         st.session_state.conversation_history.append(intro_message)
         st.session_state.messages.append(intro_message)
-
+    
+    # Display game state in sidebar
     display_game_state()
-
+    
+    # Display chat history
     for message in st.session_state.messages:
         with st.chat_message("assistant" if message["role"] == "model" else "user"):
-            text = message["parts"][0]["text"]
-            highlighted_text = text.replace("**", "<span class='highlight'>").replace("**", "</span>")
-            st.markdown(highlighted_text, unsafe_allow_html=True)
-
+            st.markdown(message["parts"][0]["text"])
+    
+    # Game over check
     if st.session_state.game_state['health'] <= 0:
         st.error("💀 Game Over - You have perished in the Cursed Forest")
         if st.button("Start New Game"):
             st.session_state.clear()
             st.rerun()
         return
-
-    if st.session_state.game_state['found_item']:
-        item = st.session_state.game_state['found_item']
-        if st.button(f"Pick up {item.capitalize()}"):
-            add_item_to_inventory()
-
+    
+    # User input
     user_input = st.chat_input("What will you do next?", key="user_input")
-
+    
     if user_input:
+        # Add user input to history
         user_message = {"role": "user", "parts": [{"text": user_input}]}
         st.session_state.conversation_history.append(user_message)
         st.session_state.messages.append(user_message)
-
-        st.session_state.game_state['choices_made'] += 1
+        
         with st.spinner("The forest whispers..."):
+            # Generate and display response
             response = generate_story_response(st.session_state.conversation_history)
+            
+            # Update game state based on response
             update_game_state(response)
+            
+            # Add response to history
             ai_message = {"role": "model", "parts": [{"text": response}]}
             st.session_state.conversation_history.append(ai_message)
             st.session_state.messages.append(ai_message)
-
-        st.rerun()
+            
+            # Display response
+            with st.chat_message("assistant"):
+                st.markdown(response)
 
 if __name__ == "__main__":
     main()
