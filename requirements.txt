@@ -1,3 +1,3 @@
-streamlit==1.25.0  # or the latest compatible version for your environment
-google-generativeai  # specify the version if required, e.g., google-generativeai==0.2.1
-typing-extensions  # This might be required if using Python versions < 3.10
+streamlit
+google-generativeai
+typing-extensions
