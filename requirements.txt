@@ -6,3 +6,4 @@ dotenv
 google.generativeai as genai
 List, Dict, Any
 random
+python-dotenv  # Corrected to install the `dotenv` library as `python-dotenv`
