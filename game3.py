@@ -7,7 +7,7 @@ import random
 
 # Load environment variables and configure API
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+genai.configure(api_key='IzaSyCLxUW-cFV8NbaIniDd7iv0oW1jbz1G8Xg')
 
 # Custom styles
 def apply_custom_styles():
