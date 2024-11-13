@@ -1,12 +1,10 @@
 import os
 import streamlit as st
-from dotenv import load_dotenv
 import google.generativeai as genai
 from typing import List, Dict, Any
 import random
 
 # Load environment variables and configure API
-load_dotenv()
 genai.configure(api_key='IzaSyCLxUW-cFV8NbaIniDd7iv0oW1jbz1G8Xg')
 
 # Custom styles
