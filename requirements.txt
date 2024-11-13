@@ -2,8 +2,4 @@ vega_datasets==0.9.0
 pandas==1.2.5
 streamlit==0.86.0
 altair==4.1.0
-dotenv 
-google.generativeai as genai
-List, Dict, Any
-random
 python-dotenv  # Corrected to install the `dotenv` library as `python-dotenv`
